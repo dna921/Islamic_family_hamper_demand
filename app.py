@@ -305,8 +305,6 @@ def hamper_demand_map():
     st.plotly_chart(fig)
     st.title("📊 Exploratory Data Analysis")
 
-    st.image('Screenshot(132).png', use_column_width=True)
-    st.image('download.jpg', use_column_width=True)
 
 # Page 5: Data Collection
 def data_collection():
