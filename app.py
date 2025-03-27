@@ -304,7 +304,7 @@ def hamper_demand_map():
     fig.update_layout(mapbox_style='open-street-map')
     st.plotly_chart(fig)
     st.title("📊 Exploratory Data Analysis")
-    st.image('Screenshot(132).png', use_container_width=True)
+    st.image('Screenshot (132).png', use_container_width=True)
     st.image('download.png', use_container_width=True)
 
     
