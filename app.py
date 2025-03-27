@@ -303,6 +303,13 @@ def hamper_demand_map():
     )
     fig.update_layout(mapbox_style='open-street-map')
     st.plotly_chart(fig)
+    st.title("📊 Exploratory Data Analysis")
+    st.image('Screenshot(132).png', use_container_width=True)
+    st.image('download.png', use_container_width=True)
+
+    
+
+
 
 
 # Page 5: Data Collection
@@ -337,7 +344,7 @@ def thank_you_page():
 # Main App Logic
 def main():
     st.sidebar.title("Islamic Family App")
-    app_page = st.sidebar.radio("Select a Page", ["Dashboard", "Neighbourhood Mapping", "ML Modelling","Explainable AI", "Data Collection","Thank You"])
+    app_page = st.sidebar.radio("Select a Page", ["Dashboard", "Neighbourhood Mapping", "ML Modeling","Explainable AI", "Data Collection","Thank You"])
 
     if app_page == "Dashboard":
         dashboard()
