@@ -76,17 +76,7 @@ import seaborn as sns
 
 import streamlit as st
 
-def eda_page():
-    st.title("📊 Exploratory Data Analysis")
-    st.write("Click below to expand each insight:")
 
-    with st.expander("📆 EDA insights"):
-        st.image('Screenshot(132).png', use_column_width=True)
-
-
-
-    with st.expander("📊 Correlation Heatmap"):
-        st.image('download.jpg', use_column_width=True)
 
 
 
@@ -313,6 +303,11 @@ def hamper_demand_map():
     )
     fig.update_layout(mapbox_style='open-street-map')
     st.plotly_chart(fig)
+    st.title("📊 Exploratory Data Analysis")
+
+    st.image('Screenshot(132).png', use_column_width=True)
+    st.image('download.jpg', use_column_width=True)
+
 # Page 5: Data Collection
 def data_collection():
     st.title("Registration form")
@@ -345,12 +340,10 @@ def thank_you_page():
 # Main App Logic
 def main():
     st.sidebar.title("Islamic Family App")
-    app_page = st.sidebar.radio("Select a Page", ["Dashboard", "EDA", "Neighbourhood Mapping", "ML Modelling","Explainable AI", "Data Collection","Thank You"])
+    app_page = st.sidebar.radio("Select a Page", ["Dashboard", "Neighbourhood Mapping", "ML Modelling","Explainable AI", "Data Collection","Thank You"])
 
     if app_page == "Dashboard":
         dashboard()
-    elif app_page == "eda_page":
-        eda_page()
     elif app_page == "Neighbourhood Mapping":
         hamper_demand_map()
     elif app_page == "ML Modeling":
