@@ -303,7 +303,6 @@ def hamper_demand_map():
     )
     fig.update_layout(mapbox_style='open-street-map')
     st.plotly_chart(fig)
-    st.title("📊 Exploratory Data Analysis")
 
 
 # Page 5: Data Collection
