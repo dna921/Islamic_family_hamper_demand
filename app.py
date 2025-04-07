@@ -1,3 +1,36 @@
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+import joblib
+import os
+import re
+import pickle
+import shap
+import xgboost as xgb
+from sklearn.preprocessing import LabelEncoder
+from sentence_transformers import SentenceTransformer, util
+from transformers import pipeline
+
+# -------------------------------
+# Area Mapping
+# -------------------------------
+broad_areas = [
+    'Londonderry', 'NAIT/Kingway', 'Boyle Street/McCauley', 'Windermere', 'Castle Downs',
+    'Northeast Edmonton', 'Clareview', 'Alberta Avenue', 'Mill Woods', 'Blue Quill',
+    'Strathcona', 'Jasper Place', 'Malmo Plains', 'Bonnie Doon', 'Ellerslie',
+    'West Edmonton', 'Calder/Kensington', 'Oliver/Downtown', 'Albany/Cumberland',
+    'Beverly', 'North Central', 'University Area', 'Meadowlark/Jasper Place', 'Eastgate',
+    'Capilano', 'The Hamptons', 'Terwillegar', 'Downtown', 'Red Deer', 'The Meadows', 'Camrose'
+]
+broad_area_mapping = {area: idx for idx, area in enumerate(broad_areas)}
+
+# -------------------------------
+
+# -------------------------------------
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -81,9 +114,6 @@ import streamlit as st
 
 
 
-
-
-
 def explainable_ai_page():
     st.title("🧠 Explainable AI Insights")
     st.write("### Understanding What Drives Food Hamper Needs")
@@ -117,6 +147,8 @@ def explainable_ai_page():
 
     # 📉 Residual Plot
     st.subheader("📉 Residual Plot")
+    st.markdown("This plot shows how accurate our model is. The closer the dots are to the red line, the better the predictions.")
+
     fig1, ax1 = plt.subplots()
     sns.scatterplot(x=y_pred, y=residuals, ax=ax1)
     ax1.axhline(0, color='red', linestyle='--')
@@ -125,8 +157,10 @@ def explainable_ai_page():
     ax1.set_title("Residual Plot for Hamper Demand")
     st.pyplot(fig1)
 
+
     # 🧠 SHAP Summary Plot
     st.subheader("📌 SHAP Summary Plot")
+    
 
     # Create SHAP explainer
     explainer = shap.Explainer(booster)
@@ -134,10 +168,25 @@ def explainable_ai_page():
 
     # Plot to matplotlib figure and display in Streamlit
     st.subheader("SHAP Summary Plot - Hamper Demand")
+    st.markdown("""
+🧠 **Interpretation Tip**  
+Each dot represents one prediction made by the model.  
+
+- **Position**: The further a dot is from the center (left or right), the more impact that feature had on the prediction.
+- **Color**: Indicates the feature value.  
+   - **Red = high value**  
+   - **Blue = low value**
+
+📌 For example, more **dependents** (red dots on the right) tend to **increase** predicted hamper demand.  
+Lower **distance** (blue dots on the left) may **decrease** the prediction slightly.
+
+This helps us see which features matter the most when estimating food hamper needs.
+""")
 
     fig_summary, ax_summary = plt.subplots()
     shap.summary_plot(shap_values.values, X_test, show=False)
     st.pyplot(fig_summary)
+    
 
         # Only keep first target's SHAP values (hamper_demand)
     X_test_shap = pd.read_csv("X_test.csv")  # ← this loads your SHAP input
@@ -156,6 +205,25 @@ def explainable_ai_page():
         top_features = [X_test_shap.columns[i] for i in top_indices]
 
         st.subheader("Dependence Plots (Top 5)")
+        st.markdown("""
+📊 **Dependence Plot Guide**
+
+These plots show how each top feature affects the model’s prediction, one at a time.
+
+- **X-axis**: The actual value of the feature (e.g., number of dependents).
+- **Y-axis**: The SHAP value (how much that feature pushed the prediction up or down).
+- **Color**: Shows interaction with another feature (e.g., distance or dependents).
+
+### How to read this:
+- If the dots go **upward**, higher values of the feature **increase** the predicted hamper demand.
+- If they go **downward**, higher values **decrease** the prediction.
+
+📌 Example:  
+In the `dependents_qty` plot, as the number of dependents increases, the model tends to predict **more** food hampers needed.
+
+These insights help us understand what factors influence need in each neighborhood.
+""")
+
     for feature in top_features:
       st.write(f"SHAP Dependence Plot: {feature}")
       shap.dependence_plot(feature, shap_vals_hamper, X_test_shap, show=False)
@@ -180,12 +248,20 @@ def machine_learning_modeling():
         # 📥 User Inputs
         dependents = st.number_input("👨‍👩‍👧 Number of Dependents", min_value=0)
         distance = st.number_input("📍 Distance (km) from center", min_value=0.0)
-        month = st.selectbox("📆 Month", list(range(1, 13)))
+
+        # Month with names
+        month_dict = {
+            "January": 1, "February": 2, "March": 3, "April": 4,
+            "May": 5, "June": 6, "July": 7, "August": 8,
+            "September": 9, "October": 10, "November": 11, "December": 12
+        }
+        month_name = st.selectbox("📆 Month", list(month_dict.keys()))
+        month = month_dict[month_name]
+
         requests = st.number_input("📝 Requests per Household", min_value=0.0)
-        week = st.selectbox("📅 Week of Month", [1, 2, 3, 4])
         avg_size = st.number_input("👥 Average Household Size", min_value=0.0)
 
-        # 📍 Broad Area selection (full list)
+        # 📍 Broad Area selection
         broad_areas = [
             'Londonderry', 'NAIT/Kingway', 'Boyle Street/McCauley', 'Windermere', 'Castle Downs',
             'Northeast Edmonton', 'Clareview', 'Alberta Avenue', 'Mill Woods', 'Blue Quill',
@@ -198,7 +274,7 @@ def machine_learning_modeling():
         broad_area = st.selectbox("🏘️ Broad Area", broad_areas)
         broad_area_encoded = broad_area_mapping[broad_area]
 
-        # 👻 Default socio-economic features (dummy values for now)
+        # 👻 Socio-economic defaults
         input_data = pd.DataFrame([{
             'dependents_qty': dependents,
             'primary_client_key': 0,
@@ -206,7 +282,7 @@ def machine_learning_modeling():
             'distance_km': distance,
             'month': month,
             'requests_per_household': requests,
-            'week_of_month': week,
+            'week_of_month': 1,  # 👈 Defaulted internally
             'Average household size': avg_size,
             'broad_area_encoded': broad_area_encoded,
             'Couple-family households with children': 5265.0,
@@ -217,15 +293,14 @@ def machine_learning_modeling():
             'Total one-parent families': 0
         }])
 
-        # ✅ Ensure correct feature order (must match model exactly)
         expected_columns = [
-    'dependents_qty', 'primary_client_key', 'house_number', 'distance_km', 'month',
-    'requests_per_household', 'week_of_month', 'Average household size', 'broad_area_encoded',
-    'Couple-family households with children', 'Multigenerational households',
-    'One-parent families in which the parent is a man+',
-    'One-parent families in which the parent is a woman+',
-    'Persons not in census families - Living alone', 'Total one-parent families'
-          ]
+            'dependents_qty', 'primary_client_key', 'house_number', 'distance_km', 'month',
+            'requests_per_household', 'week_of_month', 'Average household size', 'broad_area_encoded',
+            'Couple-family households with children', 'Multigenerational households',
+            'One-parent families in which the parent is a man+',
+            'One-parent families in which the parent is a woman+',
+            'Persons not in census families - Living alone', 'Total one-parent families'
+        ]
 
         input_data = input_data[expected_columns]
 
@@ -239,15 +314,29 @@ def machine_learning_modeling():
 
         # 🔮 Make Prediction
         hamper_pred = model.predict(input_data.values)[0]
-
-        # ✅ Display Result
-        # 🔍 Multiply by max value used during model training to rescale
-        max_hamper_value = 100  # Replace this with the actual max hamper demand from your training set
+        max_hamper_value = 100
         hamper_pred = hamper_pred * max_hamper_value
 
         st.success(f"📦 Predicted Hamper Demand: **{int(round(hamper_pred))} hampers**")
-      
 
+        # 📊 Hamper Demand by Week from historical data
+        st.markdown("### 📊 Hamper Demand by Week in Your Selected Area")
+
+        try:
+            df = pd.read_csv("df_merged_backup.csv")
+            df['broad_area_clean'] = df['broad_area'].astype(str).str.strip().str.title()
+
+            filtered_df = df[(df['broad_area_clean'] == broad_area) & (df['month'] == month)]
+
+            if not filtered_df.empty and 'week_of_month' in filtered_df.columns:
+                fig_week = px.bar(filtered_df, x='week_of_month', y='hamper_demand',
+                                  title=f"Hamper Demand by Week - {broad_area} ({month_name})",
+                                  labels={'week_of_month': 'Week of Month', 'hamper_demand': 'Hamper Demand'})
+                st.plotly_chart(fig_week)
+            else:
+                st.info("No weekly data available for this area and month.")
+        except Exception as e:
+            st.error(f"Error loading weekly hamper demand chart: {e}")
 
     except Exception as e:
         st.error(f"❌ Unexpected error: {e}")
@@ -303,13 +392,125 @@ def hamper_demand_map():
     )
     fig.update_layout(mapbox_style='open-street-map')
     st.plotly_chart(fig)
-    st.title("📊 Exploratory Data Analysis")
-    st.image('Screenshot (132).png', use_container_width=True)
-    st.image('download.png', use_container_width=True)
+
+def interactive_eda_page():
+    st.title("📊 Interactive EDA - Hamper Demand Insights")
+    st.write("Use the filters below to explore hamper demand and volunteer data across neighborhoods.")
+
+    # Load data
+    df = pd.read_csv("df_merged_backup.csv")
+
+    # Clean area names
+    df['broad_area_clean'] = df['broad_area'].astype(str).str.strip().str.title()
+
+    # Filter widgets
+    area_list = sorted(df['broad_area_clean'].dropna().unique())
+    selected_area = st.selectbox("🏘️ Select Broad Area", area_list)
+    month_dict = {
+    "January": 1, "February": 2, "March": 3, "April": 4,
+    "May": 5, "June": 6, "July": 7, "August": 8,
+    "September": 9, "October": 10, "November": 11, "December": 12
+      }
+    month_name = st.selectbox("📅 Select Month", list(month_dict.keys()))
+    selected_month = month_dict[month_name]
+
+    # Filtered DataFrame
+    filtered_df = df[(df['broad_area_clean'] == selected_area) & (df['month'] == selected_month)]
+
+    st.markdown(f"### 📌 Overview for **{selected_area}**")
+
+    # 📦 Hamper Demand by Week of Month
+    if 'week_of_month' in filtered_df.columns:
+        fig1 = px.bar(filtered_df, x='week_of_month', y='hamper_demand',
+                      title="📦 Hamper Demand by Week",
+                      labels={'week_of_month': 'Week of Month', 'hamper_demand': 'Hamper Demand'})
+        st.plotly_chart(fig1)
+
+        # 📈 Hamper Demand by Month (Interactive Bar Chart)
+    st.markdown("### 📦 Monthly Hamper Demand Overview")
+
+    # Ensure necessary columns exist
+    if 'month' in df.columns and 'hamper_demand' in df.columns:
+        # Map month number to name
+        month_dict = {
+            1: 'January', 2: 'February', 3: 'March', 4: 'April',
+            5: 'May', 6: 'June', 7: 'July', 8: 'August',
+            9: 'September', 10: 'October', 11: 'November', 12: 'December'
+        }
+
+        # Group by month and sum hamper demand
+        month_demand = df.groupby('month')['hamper_demand'].sum().reset_index()
+        month_demand['Month Name'] = month_demand['month'].astype(int).map(month_dict)
+
+        # Sort by calendar month
+        month_demand = month_demand.sort_values('month')
+
+        # Plot
+        fig_month = px.bar(
+            month_demand,
+            x='Month Name',
+            y='hamper_demand',
+            title="📅 Total Hamper Demand by Month",
+            labels={'hamper_demand': 'Total Hamper Demand', 'Month Name': 'Month'},
+            color='hamper_demand',
+            color_continuous_scale='Blues'
+        )
+
+        st.plotly_chart(fig_month)
+
+
+    # 👨‍👩‍👧 Dependents Distribution
+    if 'dependents_qty' in filtered_df.columns:
+        fig2 = px.histogram(filtered_df, x='dependents_qty', nbins=10,
+                            title="👨‍👩‍👧 Dependents Distribution",
+                            labels={'dependents_qty': 'Number of Dependents'})
+        st.plotly_chart(fig2)
+
+    # 📍 Distance from Center
+    if 'distance_km' in filtered_df.columns:
+        fig3 = px.histogram(filtered_df, x='distance_km', nbins=10,
+                            title="📍 Distance from Center",
+                            labels={'distance_km': 'Distance (km)'})
+        st.plotly_chart(fig3)
+
+    # 👥 Average Household Size across Areas (New Plot)
+    if 'Average household size' in df.columns:
+        avg_household = df.groupby('broad_area_clean')['Average household size'].mean().reset_index()
+        fig4 = px.bar(avg_household, x='broad_area_clean', y='Average household size',
+                      title='👥 Average Household Size by Area',
+                      labels={'broad_area_clean': 'Broad Area', 'Average household size': 'Avg. Household Size'})
+        fig4.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig4)
+
+    # 📊 Socio-Economic Factors Across All Areas
+    # 📊 Overall Socio-Economic Household Type Distribution (Pie Chart)
+    st.markdown("### 🏘️ Overall Socio-Economic Household Composition")
+
+    # List of relevant columns
+    socio_cols = [
+        'Couple-family households with children',
+        'Multigenerational households',
+        'One-parent families in which the parent is a man+',
+        'One-parent families in which the parent is a woman+',
+        'Persons not in census families - Living alone',
+        'Total one-parent families'
+    ]
+
+    # Ensure all required columns exist
+    if all(col in df.columns for col in socio_cols):
+        # Aggregate total counts across all rows
+        overall_household_summary = df[socio_cols].sum()
+
+        # Plot as pie chart
+        fig_pie = px.pie(
+            names=overall_household_summary.index,
+            values=overall_household_summary.values,
+            title="Household Type Distribution Across All Areas",
+            hole=0.4
+        )
+        st.plotly_chart(fig_pie)
 
     
-
-
 
 
 # Page 5: Data Collection
@@ -341,13 +542,24 @@ def thank_you_page():
 
 
 
-# Main App Logic
+# -------------------------------------
 def main():
     st.sidebar.title("Islamic Family App")
-    app_page = st.sidebar.radio("Select a Page", ["Dashboard", "Neighbourhood Mapping", "ML Modeling","Explainable AI", "Data Collection","Thank You"])
+    app_page = st.sidebar.radio("Select a Page", [
+        "Dashboard",
+        "Interactive EDA",
+        "Neighbourhood Mapping",
+        "ML Modeling",
+        "Explainable AI",
+        "Data Collection",
+        "Thank You"
+    ])
 
+    
     if app_page == "Dashboard":
-        dashboard()
+        dashboard()  # Call your dashboard function
+    elif app_page == "Interactive EDA":
+        interactive_eda_page()
     elif app_page == "Neighbourhood Mapping":
         hamper_demand_map()
     elif app_page == "ML Modeling":
@@ -358,7 +570,6 @@ def main():
         data_collection()
     elif app_page == "Thank You":
         thank_you_page()
-
 
 if __name__ == "__main__":
     main()
