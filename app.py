@@ -12,7 +12,6 @@ import pickle
 import shap
 import xgboost as xgb
 from sklearn.preprocessing import LabelEncoder
-from sentence_transformers import SentenceTransformer, util
 from transformers import pipeline
 
 # -------------------------------
